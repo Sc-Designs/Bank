@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from .db.db import get_connection
 from .router import api_router
+from .api.Account.AccountRoutes import route as account_opening
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -29,3 +30,5 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+app.include_router(account_opening)
