@@ -19,10 +19,26 @@ CREATE TABLE IF NOT EXISTS user_acc (
 CREATE TABLE IF NOT EXISTS user_balance (
     user_id UUID PRIMARY KEY REFERENCES user_acc(id) ON DELETE RESTRICT,
     balance NUMERIC(12, 2) NOT NULL DEFAULT 0.00 CHECK (balance >= 0),
+    transation UUID[] NOT NULL DEFAULT '{}',
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 3. Append-only financial ledger (Add Money, Credit, Debit, Transfer Money)
+-- 3. Bank transfer orders
+CREATE TABLE IF NOT EXISTS BankTransfer (
+    OrderID UUID PRIMARY KEY,
+    AccountDetail UUID,
+    Sender UUID NULL,
+    Receiver UUID NULL,
+    currency CHAR(3) NOT NULL DEFAULT 'USD',
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'posted', 'reversed', 'failed')),
+    Mode VARCHAR(20),
+    FOREIGN KEY (AccountDetail) REFERENCES user_acc(id),
+    FOREIGN KEY (Sender) REFERENCES user_acc(id),
+    FOREIGN KEY (Receiver) REFERENCES user_acc(id)
+);
+
+-- 4. Append-only financial ledger (Add Money, Credit, Debit, Transfer Money)
 CREATE TABLE IF NOT EXISTS balance_transactions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES user_acc(id) ON DELETE RESTRICT,

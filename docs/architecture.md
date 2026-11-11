@@ -24,15 +24,22 @@ Bank/
 │   └── architecture.md                # This file
 └── src/
     └── bank/
-        ├── __init__.py                # FastAPI app instance & router registration
+        ├── __init__.py                # Exports app, create_app, and main
+        ├── app.py                     # FastAPI app factory & startup DB check
+        ├── main.py                    # CLI entry point (uv run bank)
+        ├── api/
+        │   ├── Account/               # Account routes, schemas, service, utils & validators
+        │   ├── BankTransfer/
+        │   │   └── MoneySchema.py     # PostgreSQL DDL helper for BankTransfer
+        │   └── User Balance/
+        │       └── UserBallanceSchema.py  # PostgreSQL DDL helper for user_balance
         ├── config/
         │   └── config.py              # Pydantic Settings loader for .env (POSTGRES_CONFIG)
         ├── db/
         │   └── db.py                  # PostgreSQL connection factory (psycopg v3)
-        ├── controller/
-        │   └── user_controller.py     # Business logic, Pydantic schemas & SQL queries
         └── router/
-            └── user_router.py         # FastAPI APIRouter endpoints (/users)
+            ├── __init__.py            # Aggregates feature routers (api_router)
+            └── routes.py              # Bank API router
 ```
 
 ---
