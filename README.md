@@ -1,87 +1,116 @@
-# Simple Bank CRUD — Planning README
+# Simple Bank CRUD — FastAPI & PostgreSQL
 
-## 1. Goal
+A learning-focused banking backend built with **FastAPI**, **PostgreSQL**, **`psycopg`**, and **`uv`** (`Python >= 3.15`). It manages user accounts, exact rupee balances, immutable ledger entries, and atomic money movement across six core banking workflows:
 
-Plan a small banking application that manages users, their rupee balances, and a history of money credited or debited. This is a learning-project plan, not a production banking system.
+- **Account Details Show** — View profile identity, active status, current balance, and activity summary
+- **Bank Balance** — Read exact rupee balance (`NUMERIC(12, 2)`)
+- **Add Money** — Deposit funds into your own account (`credit` / `add_money`)
+- **Credit** — Record inward funds and increase balance atomically
+- **Debit** — Deduct funds with row-level locking (`FOR UPDATE`) and strict overdraft protection
+- **Transfer Money** — Atomically move funds from sender to receiver in one deadlock-safe transaction
 
-The database design uses three PostgreSQL tables:
+> **Important:** This is a learning project, not a production banking system. See [Important Limitations](#10-important-limitations) before handling real funds.
 
-- `user_acc`: account/profile identity.
-- `user_balance`: one current balance per user.
-- `balance_transactions`: append-only credit/debit history.
+---
 
-The schema assumes `user_acc.id` is a UUID primary key and that PostgreSQL provides `gen_random_uuid()` if the application generates IDs in the database.
+## Documentation Index
 
-## 2. Table relationships
+| Document | Description |
+|---|---|
+| **[`setup.md`](setup.md)** | Complete setup guide: `uv` vs `pip`, `uv add` commands, PostgreSQL, `.env`, VS Code setup & debugging |
+| **[`docs/api.md`](docs/api.md)** | Full REST API specification (implemented `POST /users/register` + all planned endpoints) |
+| **[`docs/database.md`](docs/database.md)** | ER diagram, column dictionary, schema migration, and atomic SQL cookbook |
+| **[`docs/schema.sql`](docs/schema.sql)** | Executable PostgreSQL DDL script |
+| **[`docs/workflows.md`](docs/workflows.md)** | Sequence diagrams, row locking, deadlock avoidance, and edge-case rules |
+| **[`docs/architecture.md`](docs/architecture.md)** | Codebase layout, layer responsibilities, security controls, and testing checklist |
+
+---
+
+## 1. Current Status & Tech Stack
+
+### Tech Stack
+- **Framework:** FastAPI (`fastapi[standard]`)
+- **Database & Drivers:** PostgreSQL + `psycopg[binary]` (v3) / `psycopg2`
+- **Configuration:** `pydantic-settings` loading `POSTGRES_CONFIG` from `.env` ([`src/bank/config/config.py`](src/bank/config/config.py))
+- **Package Manager:** `uv` (`Python >= 3.15`)
+
+### Implementation Status
+
+| Capability | Status | Location / Endpoint |
+|---|---|---|
+| User Registration + Zero Balance | **Implemented** | `POST /users/register` ([`user_router.py`](src/bank/router/user_router.py), [`user_controller.py`](src/bank/controller/user_controller.py)) |
+| Authentication (`login` / bearer token) | Planned | `POST /auth/login` |
+| **Account Details Show** & Profile Update | Planned | `GET /users/me`, `PATCH /users/me`, `DELETE /users/me` |
+| **Bank Balance** | Planned | `GET /users/me/balance` |
+| **Add Money** | Planned | `POST /users/me/add-money` |
+| **Credit** & **Debit** | Planned | `POST /users/me/transactions` |
+| **Transfer Money** | Planned | `POST /users/me/transfer` |
+| Paginated Transaction History | Planned | `GET /users/me/transactions` |
+
+---
+
+## 2. Quick Setup
+
+For full setup instructions (including `uv` vs `pip`, VS Code configuration, and troubleshooting), see **[`setup.md`](setup.md)**.
+
+```bash
+# 1. Install Python 3.15 and sync dependencies
+uv python install 3.15
+uv sync
+
+# (Reference: packages added to pyproject.toml)
+# uv add "fastapi[standard]" "psycopg[binary]" psycopg2 pydantic-settings pydotenv
+
+# 2. Configure PostgreSQL connection string
+cp .env.example .env
+# Edit .env -> POSTGRES_CONFIG=postgresql://postgres:your_password@localhost:5432/bank
+
+# 3. Initialize PostgreSQL tables
+psql -U postgres -d bank -f docs/schema.sql
+
+# 4. Run the FastAPI development server
+uv run fastapi dev src/bank/__init__.py
+```
+
+Open Swagger UI at `http://127.0.0.1:8000/docs` to test `POST /users/register`.
+
+---
+
+## 3. Core Features & Operations Matrix
+
+| Feature | Create | Read | Update | Delete |
+|---|---|---|---|---|
+| **Users / Account Details Show** | Register an account + initial `0.00` balance atomically | View full account details (`user_acc` + `user_balance` + summary) | Edit allowed profile fields (`display_name`) | Soft-deactivate (`is_active = FALSE`); never erase financial history |
+| **Bank Balance** | Auto-created at `0.00` during user registration | View current `NUMERIC(12, 2)` rupee balance | Updated only inside a locked transaction | Not deletable (`ON DELETE RESTRICT`) |
+| **Add Money / Credit** | Append `credit` ledger row + increase balance atomically | View in paginated transaction history | Immutable; correct mistakes via compensating entry | Immutable (`DELETE` forbidden) |
+| **Debit** | Lock row, check `balance >= amount`, subtract balance + append `debit` row | View in paginated transaction history | Immutable; correct mistakes via compensating entry | Immutable (`DELETE` forbidden) |
+| **Transfer Money** | Lock sender & receiver in deterministic UUID order, debit sender + credit receiver + insert paired `debit`/`credit` rows linked by `reference_id` | View outgoing/incoming transfer details with `counterparty_user_id` | Immutable; reverse via compensating transfer if needed | Immutable (`DELETE` forbidden) |
+
+A balance is a **current-value summary**; `balance_transactions` is the **authoritative history**. Never allow clients to set arbitrary balances or edit/delete posted transactions.
+
+---
+
+## 4. Database Design & Table Relationships
+
+The schema uses three PostgreSQL tables (full DDL in [`docs/schema.sql`](docs/schema.sql) and detailed guide in [`docs/database.md`](docs/database.md)):
 
 ```text
 user_acc (1) ───── (1) user_balance
     │
-    └───────────── (*) balance_transactions
+    └───────────── (*) balance_transactions  [user_id & optional counterparty_user_id]
 ```
 
-- A user has at most one balance row. `user_balance.user_id` is its primary key and references `user_acc.id`.
-- A user can have many transaction rows. Each transaction references `user_acc.id`.
-- Store rupee amounts as `NUMERIC(12, 2)`, never `FLOAT` or `REAL`.
-- Store transaction amounts as positive values; `transaction_type` says whether the amount is a `credit` or `debit`.
-- `occurred_at` records the event time as `TIMESTAMPTZ`.
+- **`user_acc`**: Profile identity (`id` UUID primary key via `gen_random_uuid()`, unique lowercase `email`, `display_name`, `scrypt` `password_hash`, `is_active`).
+- **`user_balance`**: Exactly one row per user (`user_id` PK/FK, `balance NUMERIC(12, 2) CHECK (balance >= 0)`). Never use `FLOAT` or `REAL` for money.
+- **`balance_transactions`**: Append-only ledger (`id`, `user_id`, `transaction_type IN ('credit', 'debit')`, `operation_kind IN ('add_money', 'credit', 'debit', 'transfer')`, positive `amount NUMERIC(12, 2) CHECK (amount > 0)`, optional `counterparty_user_id`, `reference_id`, `idempotency_key`, `occurred_at TIMESTAMPTZ`, `note`).
 
-## 3. Planned operations (CRUD)
+---
 
-| Area | Create | Read | Update | Delete |
-|---|---|---|---|---|
-| Users | Register an account | View account details | Edit allowed profile fields | Deactivate account; do not erase transaction history |
-| Balances | Create a zero balance with the user | View a user's balance | Change only as part of a recorded transaction | Not directly deletable through normal app operations |
-| Transactions | Add a credit/debit entry | View history, newest first | Do not edit posted entries; use a compensating transaction to correct mistakes | Do not delete posted entries |
+## 5. Atomic Transaction Workflows
 
-A balance is a current-value summary. The transaction table is the history. Never let a client directly set an arbitrary balance or edit/delete a posted transaction.
+Every money-moving workflow executes inside **one PostgreSQL transaction** using parameterized queries and row-level locking (`FOR UPDATE`). See [`docs/workflows.md`](docs/workflows.md) for sequence diagrams and edge cases.
 
-## 4. Suggested PostgreSQL schema
-
-Create the user table first, then the tables that reference it:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-CREATE TABLE user_acc (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(254) NOT NULL UNIQUE,
-    display_name VARCHAR(100) NOT NULL,
-    password_hash TEXT NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE user_balance (
-    user_id UUID PRIMARY KEY REFERENCES user_acc(id) ON DELETE RESTRICT,
-    balance NUMERIC(12, 2) NOT NULL DEFAULT 0.00 CHECK (balance >= 0),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE balance_transactions (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES user_acc(id) ON DELETE RESTRICT,
-    transaction_type VARCHAR(6) NOT NULL
-        CHECK (transaction_type IN ('credit', 'debit')),
-    amount NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
-    occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    note VARCHAR(250)
-);
-
-CREATE INDEX balance_transactions_user_date_idx
-    ON balance_transactions (user_id, occurred_at DESC, id DESC);
-```
-
-If `user_acc` already exists, do not recreate it. Check its actual column names and types, then create only the missing tables with a migration. The foreign key types must match exactly (`user_acc.id` and `user_balance.user_id` must both be UUID).
-
-The nonnegative balance constraint disallows overdrafts. Remove that rule only if the product explicitly supports overdrafts and defines their limits.
-
-## 5. Transaction workflow
-
-Credit and debit must be one database transaction: lock the user's balance row, validate the amount and sufficient funds for a debit, update the balance, insert the history row, and commit. If any step fails, roll back both writes. This prevents concurrent requests from producing a balance that disagrees with the ledger.
-
-Example debit workflow in SQL (execute as one transaction, bind the UUID and amount as parameters):
+### Debit (With Overdraft Protection)
 
 ```sql
 BEGIN;
@@ -91,7 +120,7 @@ FROM user_balance
 WHERE user_id = :user_id
 FOR UPDATE;
 
--- Application verifies the row exists, amount > 0, and balance >= :amount.
+-- Application verifies row exists, :amount > 0, and balance >= :amount.
 
 UPDATE user_balance
 SET balance = balance - :amount,
@@ -99,19 +128,71 @@ SET balance = balance - :amount,
 WHERE user_id = :user_id
   AND balance >= :amount;
 
--- Application must verify exactly one row was updated; otherwise roll back.
+-- Application verifies exactly 1 row updated; otherwise ROLLBACK.
 
-INSERT INTO balance_transactions (user_id, transaction_type, amount)
-VALUES (:user_id, 'debit', :amount);
+INSERT INTO balance_transactions (user_id, transaction_type, operation_kind, amount, idempotency_key, note)
+VALUES (:user_id, 'debit', 'debit', :amount, :idempotency_key, :note);
 
 COMMIT;
 ```
 
-For a credit, add the amount to `balance` and insert a `credit` transaction in the same transaction. Validate input at the API boundary and use parameterized queries; never concatenate user input into SQL. Add an idempotency key before exposing money movement to clients so retries cannot apply a payment twice.
+### Add Money & Credit
 
-## 6. Example read queries
+In the same single-transaction pattern: lock the `user_balance` row with `FOR UPDATE`, add `:amount` (`balance = balance + :amount`), and insert a `credit` row (`operation_kind = 'add_money'` for deposits or `'credit'` for general credits).
 
-Get one user's balance:
+### Transfer Money (Deadlock-Free Dual Locking)
+
+To prevent deadlocks when two users transfer to each other simultaneously, lock **both** balance rows in deterministic ascending `user_id` order before mutating either balance:
+
+```sql
+BEGIN;
+
+-- Application verifies :sender_id <> :receiver_id and :amount > 0.
+
+SELECT b.user_id, b.balance
+FROM user_balance AS b
+JOIN user_acc AS u ON u.id = b.user_id
+WHERE b.user_id IN (:sender_id, :receiver_id)
+  AND u.is_active = TRUE
+ORDER BY b.user_id ASC
+FOR UPDATE OF b;
+
+-- Application verifies both rows returned and sender balance >= :amount.
+
+UPDATE user_balance
+SET balance = balance - :amount, updated_at = now()
+WHERE user_id = :sender_id AND balance >= :amount;
+
+UPDATE user_balance
+SET balance = balance + :amount, updated_at = now()
+WHERE user_id = :receiver_id;
+
+INSERT INTO balance_transactions (
+    user_id, transaction_type, operation_kind, amount, counterparty_user_id, reference_id, idempotency_key, note
+)
+VALUES
+    (:sender_id,   'debit',  'transfer', :amount, :receiver_id, :reference_id, :idempotency_key, :sender_note),
+    (:receiver_id, 'credit', 'transfer', :amount, :sender_id,   :reference_id, NULL,             :receiver_note);
+
+COMMIT;
+```
+
+If any check or write fails, PostgreSQL rolls back the entire transaction so balances and ledger stay synchronized.
+
+---
+
+## 6. Key Read Queries
+
+### Account Details Show
+
+```sql
+SELECT u.id, u.email, u.display_name, u.is_active, u.created_at, b.balance, b.updated_at AS balance_updated_at
+FROM user_acc AS u
+JOIN user_balance AS b ON b.user_id = u.id
+WHERE u.id = :user_id AND u.is_active = TRUE;
+```
+
+### Bank Balance
 
 ```sql
 SELECT u.id, u.display_name, b.balance, b.updated_at
@@ -120,67 +201,64 @@ JOIN user_balance AS b ON b.user_id = u.id
 WHERE u.id = :user_id AND u.is_active = TRUE;
 ```
 
-Read a user's recent transaction history (bounded):
+### Recent Transaction History
 
 ```sql
-SELECT id, transaction_type, amount, occurred_at, note
+SELECT id, transaction_type, operation_kind, amount, counterparty_user_id, reference_id, occurred_at, note
 FROM balance_transactions
 WHERE user_id = :user_id
 ORDER BY occurred_at DESC, id DESC
 LIMIT 50;
 ```
 
-Create user and starting balance together in one transaction:
+---
 
-```sql
-BEGIN;
+## 7. API Endpoints Summary
 
-INSERT INTO user_acc (email, display_name, password_hash)
-VALUES (:email, :display_name, :password_hash)
-RETURNING id;
+Full request/response schemas, validation rules, and error payloads are documented in **[`docs/api.md`](docs/api.md)**.
 
--- Use the returned id as :user_id in the following statement.
-INSERT INTO user_balance (user_id, balance)
-VALUES (:user_id, 0.00);
+- `POST /users/register` *(Implemented)* — Register user + create `0.00` balance atomically.
+- `POST /auth/login` *(Planned)* — Authenticate and issue access token.
+- `GET /users/me` *(Planned)* — **Account Details Show** (profile, status, balance, summary).
+- `PATCH /users/me` *(Planned)* — Update allowed profile fields.
+- `DELETE /users/me` *(Planned)* — Soft-deactivate account while keeping financial history.
+- `GET /users/me/balance` *(Planned)* — **Bank Balance** check.
+- `POST /users/me/add-money` *(Planned)* — **Add Money** (simulated deposit).
+- `POST /users/me/transactions` *(Planned)* — **Credit** or **Debit** via atomic service workflow.
+- `POST /users/me/transfer` *(Planned)* — **Transfer Money** to another active user.
+- `GET /users/me/transactions?limit=50&cursor=...` *(Planned)* — Paginated transaction history.
 
-COMMIT;
-```
+> For a real bank, clients must not be allowed to post arbitrary credits or deposits. Money inflow must originate from a verified payment gateway or clearing ledger reconciliation process.
 
-## 7. Application/API plan
+---
 
-A backend can expose these routes after authentication and authorization are in place:
+## 8. Implementation Order
 
-- `POST /users` — register a user and create the zero balance atomically.
-- `GET /users/me` — read the signed-in user's profile.
-- `PATCH /users/me` — update permitted profile fields.
-- `GET /users/me/balance` — read the current balance.
-- `GET /users/me/transactions?limit=50&cursor=...` — read paginated history.
-- `POST /users/me/transactions` — request a credit/debit through the atomic service workflow.
+1. Confirm PostgreSQL is installed and apply [`docs/schema.sql`](docs/schema.sql) (see [`setup.md`](setup.md)).
+2. Keep existing atomic registration (`POST /users/register`) and add login/auth (`get_current_user`).
+3. Implement **Account Details Show** (`GET /users/me`) and **Bank Balance** (`GET /users/me/balance`).
+4. Implement paginated transaction history (`GET /users/me/transactions`) with page-size cap and stable keyset cursor.
+5. Implement **Add Money**, **Credit**, and **Debit** service logic with `FOR UPDATE` locking, validation, and idempotency keys.
+6. Implement **Transfer Money** (`POST /users/me/transfer`) with ordered dual locking and paired ledger writes.
+7. Add automated tests for duplicate emails, invalid/zero/negative/3-decimal amounts, insufficient funds, self-transfers, concurrent debits, concurrent bidirectional transfers, and transaction rollback (see [`docs/architecture.md`](docs/architecture.md)).
+8. Add rate limiting, connection pooling, and redacted structured logging before deployment.
 
-For a real bank, clients must not be allowed to post arbitrary credits or debits. Money movement must be initiated by an authorized, trusted process and reconciled with a payment provider or bank ledger. A demo app may provide a clearly labeled simulated transaction flow.
+---
 
-## 8. Implementation order
+## 9. Acceptance Criteria
 
-1. Confirm PostgreSQL is installed and create a development database.
-2. Create the tables through a versioned migration, not untracked manual production SQL.
-3. Implement account registration and create the balance row in the same transaction.
-4. Implement authenticated profile and balance reads.
-5. Implement transaction history with a page-size cap and stable cursor ordering.
-6. Implement simulated credit/debit service logic with row locking, validation, and rollback behavior.
-7. Add tests for duplicate users, invalid/zero/negative amounts, insufficient funds, missing balance rows, concurrent debits, and rollback if the ledger insert fails.
-8. Add authentication, authorization, rate limits, and operational logging before deployment.
+- Each user has exactly one `user_balance` row after registration (`0.00`).
+- A user's account details, balance, and transaction history cannot be read or modified by another user.
+- Amounts are stored accurately as `NUMERIC(12, 2)` and must be strictly greater than zero.
+- A debit or transfer exceeding the sender's available balance is rejected without modifying balances or ledger rows.
+- Every successful **Add Money**, **Credit**, **Debit**, or **Transfer Money** operation updates balances and `balance_transactions` atomically.
+- Concurrent `A → B` and `B → A` transfers execute without deadlocks or lost updates.
+- Transaction history is immutable via regular routes and paginated newest-first.
+- Deactivating an account preserves financial history.
+- Database credentials (`POSTGRES_CONFIG`) and `password_hash` are never returned to clients or written to logs.
 
-## 9. Acceptance criteria
+---
 
-- Each user has exactly one balance row after registration.
-- A user's balance and transaction history cannot be read or changed by another user.
-- Amounts are stored exactly to two decimal places and must be greater than zero.
-- A debit that exceeds the available balance is rejected without changing balance or history.
-- A successful credit/debit updates both balance and transaction history atomically.
-- Transaction history is immutable through regular application routes and is paginated.
-- Deactivating a user does not cascade-delete their financial history.
-- Database credentials and password hashes are never returned to clients or written to logs.
+## 10. Important Limitations
 
-## 10. Important limitations
-
-This three-table design is adequate for a basic learning exercise, but not a production financial ledger. Production systems generally need immutable double-entry ledger records, payment reconciliation, idempotent operation identifiers, audit controls, fraud monitoring, backups, and regulatory review. Do not use this demo design to hold or move real customer funds.
+This three-table design is intended for learning and demonstration. Production financial platforms require immutable double-entry accounting across clearing/settlement accounts, payment gateway reconciliation, idempotent event/outbox processing, fraud monitoring, regulatory audit controls, and verified backups. **Do not use this demo design to hold or move real customer funds.**
