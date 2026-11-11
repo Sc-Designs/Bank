@@ -8,8 +8,7 @@ This document describes both the **currently implemented** endpoint in [`src/ban
 
 | Feature | Method & Path | Status | Handler / Notes |
 |---|---|---|---|
-| Health Check | `GET /health` | **Implemented** | [`health_check`](../src/bank/router/health_router.py#L8-L10) |
-| Register User | `POST /users/register` | **Implemented** | [`create_user`](../src/bank/router/user_router.py#L9-L15) → [`register_user`](../src/bank/controller/user_controller.py#L13-L59) |
+| Register User | `POST /users/register` | **Implemented** | [`create_user`](../src/bank/router/user_router.py#L12-L18) → [`register_user`](../src/bank/controller/user_controller.py#L40-L70) |
 | Sign In / Token | `POST /auth/login` | Planned | Issues bearer session/JWT for `/users/me/*` routes |
 | **Account Details Show** | `GET /users/me` | Planned | Profile + active status + balance + activity summary |
 | Update Profile | `PATCH /users/me` | Planned | Updates allowed profile fields (`display_name`) |
@@ -50,7 +49,7 @@ This document describes both the **currently implemented** endpoint in [`src/ban
 
 Creates a new `user_acc` row (with `scrypt`-hashed password) and an initial `0.00` `user_balance` row atomically.
 
-**Validation Rules** (enforced by [`RegisterUserRequest`](../src/bank/validators/user_validator.py#L6-L19)):
+**Validation Rules** (enforced by [`RegisterUserRequest`](../src/bank/controller/user_controller.py#L12-L26)):
 - Whitespace is stripped from all string fields (`str_strip_whitespace=True`).
 - `email`: `3–254` chars, lowercased, validated with regex `[^\s@]+@[^\s@]+\.[^\s@]+`.
 - `display_name`: `1–100` chars.
@@ -66,7 +65,7 @@ Creates a new `user_acc` row (with `scrypt`-hashed password) and an initial `0.0
 }
 ```
 
-**Response `201 Created`** ([`RegisteredUserResponse`](../src/bank/validators/user_validator.py#L22-L25)):
+**Response `201 Created`** ([`RegisteredUserResponse`](../src/bank/controller/user_controller.py#L28-L32)):
 
 ```json
 {

@@ -19,10 +19,10 @@ This document details how each core banking operation executes end-to-end across
 
 ## 2. User Registration *(Implemented)*
 
-Executed in [`register_user`](../src/bank/controller/user_controller.py#L13-L59):
+Executed in [`register_user`](../src/bank/controller/user_controller.py#L40-L70):
 
-1. [`RegisterUserRequest`](../src/bank/validators/user_validator.py#L6-L19) validates and normalizes `email` (trimmed + lowercased), `display_name`, and `password` (`>= 12` chars).
-2. [`hash_password`](../src/bank/utils/auth_utils.py#L5-L8) generates a 16-byte random salt via `secrets.token_bytes(16)` and hashes with `hashlib.scrypt` (`n=16384, r=8, p=1`).
+1. Pydantic validates and normalizes `email` (trimmed + lowercased), `display_name`, and `password` (`>= 12` chars).
+2. `_hash_password` generates a 16-byte random salt via `secrets.token_bytes(16)` and hashes with `hashlib.scrypt` (`n=16384, r=8, p=1`).
 3. Opens one database transaction (`with get_connection() as connection:`):
    - Inserts into `user_acc` and returns `(id, email, display_name)`.
    - Inserts `(user_id, 0.00)` into `user_balance`.
