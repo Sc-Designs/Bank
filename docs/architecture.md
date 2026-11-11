@@ -24,27 +24,43 @@ Bank/
 │   └── architecture.md                # This file
 └── src/
     └── bank/
-        ├── __init__.py                # FastAPI app instance & router registration
+        ├── __init__.py                    # Exports app, create_app, and main
+        ├── app.py                         # FastAPI app factory & router registration
+        ├── main.py                        # CLI entry point (uv run bank)
         ├── config/
-        │   └── config.py              # Pydantic Settings loader for .env (POSTGRES_CONFIG)
+        │   ├── __init__.py
+        │   └── config.py                  # Pydantic Settings loader for .env (POSTGRES_CONFIG)
         ├── db/
-        │   └── db.py                  # PostgreSQL connection factory (psycopg v3)
+        │   ├── __init__.py
+        │   └── db.py                      # PostgreSQL connection factory (psycopg v3)
+        ├── utils/
+        │   ├── __init__.py
+        │   └── auth_utils.py              # Password hashing & verification (scrypt)
+        ├── validators/
+        │   ├── __init__.py
+        │   ├── health_validator.py        # Health check response schema
+        │   └── user_validator.py          # User request/response Pydantic validators
         ├── controller/
-        │   └── user_controller.py     # Business logic, Pydantic schemas & SQL queries
+        │   ├── __init__.py
+        │   └── user_controller.py         # User registration business logic & SQL transactions
         └── router/
-            └── user_router.py         # FastAPI APIRouter endpoints (/users)
+            ├── __init__.py                # Aggregates feature routers (api_router)
+            ├── health_router.py           # Health check endpoint (GET /health)
+            └── user_router.py             # User endpoints (POST /users/register)
 ```
 
 ---
 
 ## 2. Layered Architecture
 
-The codebase follows a clean **Router → Controller → Database → Config** separation:
+The codebase follows a clean **Router → Validators / Controller → Utils / DB → Config** separation:
 
 ```mermaid
 flowchart LR
-    Client["HTTP Client / Swagger UI"] --> Router["router/* (FastAPI APIRouter)"]
-    Router --> Controller["controller/* (Validation & Transactions)"]
+    Client["HTTP Client / Swagger UI"] --> Router["router/* (FastAPI APIRouters)"]
+    Router --> Validators["validators/* (Pydantic Schemas)"]
+    Router --> Controller["controller/* (Business & DB Transactions)"]
+    Controller --> Utils["utils/* (Auth & Hashing Helpers)"]
     Controller --> DB["db/db.py (psycopg.Connection)"]
     DB --> PG[("PostgreSQL")]
     Config["config/config.py (.env Settings)"] -.-> DB
@@ -52,23 +68,29 @@ flowchart LR
 
 | Layer | File(s) | Responsibilities |
 |---|---|---|
-| **App Entry** | [`src/bank/__init__.py`](../src/bank/__init__.py) | Instantiates `app = FastAPI()` and mounts routers |
+| **App Factory & Entry** | [`app.py`](../src/bank/app.py), [`main.py`](../src/bank/main.py), [`__init__.py`](../src/bank/__init__.py) | Creates `FastAPI` instance, mounts `api_router`, exposes `uv run bank` entry point |
 | **Config** | [`src/bank/config/config.py`](../src/bank/config/config.py) | Loads `POSTGRES_CONFIG` from `.env` via `pydantic-settings` |
 | **Database** | [`src/bank/db/db.py`](../src/bank/db/db.py) | Provides `get_connection() -> psycopg.Connection` |
-| **Router** | [`src/bank/router/user_router.py`](../src/bank/router/user_router.py) | Defines HTTP verbs, paths, status codes, and response models |
-| **Controller** | [`src/bank/controller/user_controller.py`](../src/bank/controller/user_controller.py) | Input validation, password hashing, DB transaction orchestration, error mapping |
+| **Validators** | [`src/bank/validators/`](../src/bank/validators/) | Pydantic request/response models and field validation |
+| **Utilities** | [`src/bank/utils/auth_utils.py`](../src/bank/utils/auth_utils.py) | Reusable `scrypt` password hashing and verification helpers |
+| **Router** | [`src/bank/router/`](../src/bank/router/) | Defines HTTP verbs, paths, status codes, and response models |
+| **Controller** | [`src/bank/controller/user_controller.py`](../src/bank/controller/user_controller.py) | Business logic, DB transaction orchestration, and error mapping |
 
 ### Recommended Module Expansion
 
-As you implement the remaining features, follow the existing convention:
+As you implement the remaining features, keep each responsibility in its own module:
 
+- **`src/bank/validators/`**
+  - `auth_validator.py`: login/token schemas
+  - `account_validator.py`: profile, Account Details Show, Bank Balance schemas
+  - `transaction_validator.py`: Add Money, Credit/Debit, Transfer Money, History schemas
 - **`src/bank/router/`**
   - `user_router.py`: `/users/register`, `/users/me` (Account Details Show, Update, Deactivate)
   - `auth_router.py`: `/auth/login` (authentication)
-  - `account_router.py` (or `transaction_router.py`): `/users/me/balance`, `/users/me/add-money`, `/users/me/transactions`, `/users/me/transfer`
+  - `transaction_router.py`: `/users/me/balance`, `/users/me/add-money`, `/users/me/transactions`, `/users/me/transfer`
 - **`src/bank/controller/`**
   - `user_controller.py`: registration, profile read/update, account details aggregation
-  - `auth_controller.py`: password verification (`scrypt` constant-time `secrets.compare_digest`), token issuance
+  - `auth_controller.py`: credential verification & token issuance
   - `transaction_controller.py`: atomic Add Money, Credit, Debit, Transfer Money, Bank Balance, and History queries
 
 ---
@@ -76,7 +98,7 @@ As you implement the remaining features, follow the existing convention:
 ## 3. Security Controls
 
 ### Implemented Today
-- **Strong Password Hashing**: [`_hash_password`](../src/bank/controller/user_controller.py#L34-L37) uses `hashlib.scrypt` (`n=2**14, r=8, p=1`) with a unique 16-byte random salt (`secrets.token_bytes(16)`).
+- **Strong Password Hashing**: [`hash_password`](../src/bank/utils/auth_utils.py#L5-L8) uses `hashlib.scrypt` (`n=2**14, r=8, p=1`) with a unique 16-byte random salt (`secrets.token_bytes(16)`), paired with constant-time [`verify_password`](../src/bank/utils/auth_utils.py#L11-L27).
 - **Parameterized SQL**: All SQL statements pass values via `%s` bind parameters (`psycopg`), preventing SQL injection.
 - **No Credential Leakage**: `RegisteredUserResponse` returns only `id`, `email`, and `display_name`; `password_hash` and `POSTGRES_CONFIG` are never returned or logged.
 - **Minimum Password Length**: `RegisterUserRequest` enforces `min_length=12`, `max_length=128` and strips/lowercases emails.
