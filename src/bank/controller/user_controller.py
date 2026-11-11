@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import re
 import secrets
 
@@ -7,6 +8,8 @@ from fastapi import HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..db.db import get_connection
+
+logger = logging.getLogger(__name__)
 
 
 class RegisterUserRequest(BaseModel):
@@ -60,6 +63,11 @@ def register_user(payload: RegisterUserRequest) -> RegisteredUserResponse:
             detail="An account with this email already exists",
         ) from error
     except psycopg.Error as error:
+        logger.error(
+            "Registration database operation failed (type=%s, sqlstate=%s)",
+            type(error).__name__,
+            error.sqlstate,
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Registration is temporarily unavailable",
