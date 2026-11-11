@@ -1,12 +1,17 @@
+import logging
+
 import psycopg
 
 from ..config.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 def get_connection() -> psycopg.Connection:
     try:
-        conn = psycopg.connect(settings.POSTGRES_CONFIG)
-        print("Db Connected")
-    except Exception as e:
-        raise e
-    
+        connection = psycopg.connect(settings.POSTGRES_CONFIG)
+        logger.debug("PostgreSQL connection established")
+        return connection
+    except psycopg.Error:
+        logger.exception("Failed to connect to PostgreSQL database")
+        raise

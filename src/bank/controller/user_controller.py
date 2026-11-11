@@ -1,46 +1,18 @@
-import hashlib
 import logging
-import re
-import secrets
 
 import psycopg
 from fastapi import HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..db.db import get_connection
+from ..utils.auth_utils import hash_password
+from ..validators.user_validator import RegisteredUserResponse, RegisterUserRequest
 
 logger = logging.getLogger(__name__)
 
 
-class RegisterUserRequest(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-    email: str = Field(min_length=3, max_length=254)
-    display_name: str = Field(min_length=1, max_length=100)
-    password: str = Field(min_length=12, max_length=128)
-
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, value: str) -> str:
-        value = value.lower()
-        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
-            raise ValueError("Enter a valid email address")
-        return value
-
-
-class RegisteredUserResponse(BaseModel):
-    id: str
-    email: str
-    display_name: str
-
-
-def _hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1)
-    return f"scrypt${salt.hex()}${digest.hex()}"
-
-
 def register_user(payload: RegisterUserRequest) -> RegisteredUserResponse:
+    password_hash = hash_password(payload.password)
+
     try:
         with get_connection() as connection:
             with connection.cursor() as cursor:
@@ -50,9 +22,15 @@ def register_user(payload: RegisterUserRequest) -> RegisteredUserResponse:
                     VALUES (%s, %s, %s)
                     RETURNING id, email, display_name
                     """,
-                    (payload.email, payload.display_name, _hash_password(payload.password)),
+                    (payload.email, payload.display_name, password_hash),
                 )
                 user = cursor.fetchone()
+                if user is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="Registration failed to create user record",
+                    )
+
                 cursor.execute(
                     "INSERT INTO user_balance (user_id, balance) VALUES (%s, 0.00)",
                     (user[0],),
@@ -74,5 +52,7 @@ def register_user(payload: RegisterUserRequest) -> RegisteredUserResponse:
         ) from error
 
     return RegisteredUserResponse(
-        id=str(user[0]), email=user[1], display_name=user[2]
+        id=str(user[0]),
+        email=user[1],
+        display_name=user[2],
     )

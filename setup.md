@@ -287,16 +287,14 @@ Optional workspace settings: create `.vscode/settings.json`:
 
 ## 9. Run the API
 
-Run the development server from the repository root:
+Run the development server from the repository root using any of these commands:
 
 ```bash
+uv run bank
+# or
 uv run fastapi dev src/bank/__init__.py
-```
-
-If the FastAPI application object is `app` in `src/bank/__init__.py`, you can also run:
-
-```bash
-uv run uvicorn bank:app --app-dir src --reload --host 127.0.0.1 --port 8000
+# or
+uv run uvicorn bank.app:app --app-dir src --reload --host 127.0.0.1 --port 8000
 ```
 
 Open:
@@ -429,7 +427,6 @@ When all applicable items are complete, the local development environment is rea
 - Separate Uvicorn installation: generally unnecessary with `fastapi[standard]`.
 - Docker and multi-OS installation instructions: omitted to keep this guide focused on the Linux development workflow.
 - `uv export`: omitted because `uv.lock` plus `uv sync` is the preferred workflow for this repository.
-- A `bank` console script: not required to start the API when using the FastAPI CLI or Uvicorn commands above.
 
 
 

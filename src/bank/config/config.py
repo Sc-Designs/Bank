@@ -1,14 +1,16 @@
-# pydantic_settings for .env
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-class env(BaseSettings):
+
+class Settings(BaseSettings):
     POSTGRES_CONFIG: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
-        extra="ignore"
+        extra="ignore",
     )
 
-settings = env()
+
+env = Settings
+settings = Settings()

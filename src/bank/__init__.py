@@ -1,6 +1,4 @@
-from fastapi import FastAPI
+from .app import app, create_app
+from .main import main
 
-from .router.user_router import router as user_router
-
-app = FastAPI()
-app.include_router(user_router)
+__all__ = ["app", "create_app", "main"]

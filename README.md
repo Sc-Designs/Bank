@@ -30,7 +30,7 @@ A learning-focused banking backend built with **FastAPI**, **PostgreSQL**, **`ps
 
 ### Tech Stack
 - **Framework:** FastAPI (`fastapi[standard]`)
-- **Database & Drivers:** PostgreSQL + `psycopg[binary]` (v3) / `psycopg2`
+- **Database & Driver:** PostgreSQL + `psycopg[binary]` (Psycopg 3)
 - **Configuration:** `pydantic-settings` loading `POSTGRES_CONFIG` from `.env` ([`src/bank/config/config.py`](src/bank/config/config.py))
 - **Package Manager:** `uv` (`Python >= 3.15`)
 
@@ -38,6 +38,7 @@ A learning-focused banking backend built with **FastAPI**, **PostgreSQL**, **`ps
 
 | Capability | Status | Location / Endpoint |
 |---|---|---|
+| Health Check | **Implemented** | `GET /health` ([`health_router.py`](src/bank/router/health_router.py)) |
 | User Registration + Zero Balance | **Implemented** | `POST /users/register` ([`user_router.py`](src/bank/router/user_router.py), [`user_controller.py`](src/bank/controller/user_controller.py)) |
 | Authentication (`login` / bearer token) | Planned | `POST /auth/login` |
 | **Account Details Show** & Profile Update | Planned | `GET /users/me`, `PATCH /users/me`, `DELETE /users/me` |
@@ -58,18 +59,19 @@ For full setup instructions (including `uv` vs `pip`, VS Code configuration, and
 uv python install 3.15
 uv sync
 
-# (Reference: packages added to pyproject.toml)
-# uv add "fastapi[standard]" "psycopg[binary]" psycopg2 pydantic-settings pydotenv
+# (Reference: core packages)
+# uv add "fastapi[standard]" "psycopg[binary]" pydantic-settings
 
 # 2. Configure PostgreSQL connection string
 cp .env.example .env
-# Edit .env -> POSTGRES_CONFIG=postgresql://postgres:your_password@localhost:5432/bank
+# Edit .env -> POSTGRES_CONFIG=postgresql://bank_user:your_password@localhost:5432/bank
 
 # 3. Initialize PostgreSQL tables
-psql -U postgres -d bank -f docs/schema.sql
+psql -U bank_user -d bank -f docs/schema.sql
 
-# 4. Run the FastAPI development server
-uv run fastapi dev src/bank/__init__.py
+# 4. Run the FastAPI development server (any of these work)
+uv run bank
+# or: uv run fastapi dev src/bank/__init__.py
 ```
 
 Open Swagger UI at `http://127.0.0.1:8000/docs` to test `POST /users/register`.
