@@ -1,4 +1,3 @@
-
 import logging
 
 from fastapi import FastAPI
@@ -20,7 +19,7 @@ def create_app() -> FastAPI:
     @application.on_event("startup")
     async def startup():
         try:
-            connection =  get_connection()
+            connection = get_connection()
             connection.execute("SELECT 1")
             connection.close()
 
