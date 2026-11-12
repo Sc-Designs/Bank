@@ -1,5 +1,6 @@
 import logging
 import uuid
+from uuid import UUID
 
 import psycopg
 from fastapi import HTTPException, status
@@ -13,17 +14,19 @@ logger = logging.getLogger(__name__)
 BankTransfer_Schema()
 
 
-def create_bank_transfer(payload: BankTransferRequest) -> BankTransferResponse:
-    if (
-        payload.sender_id is not None
-        and payload.receiver_id is not None
-        and payload.sender_id == payload.receiver_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Sender and receiver cannot be the same account",
-        )
+def _row_to_response(row: tuple) -> BankTransferResponse:
+    return BankTransferResponse(
+        order_id=str(row[0]),
+        account_detail=str(row[1]) if row[1] is not None else None,
+        sender_id=str(row[2]) if row[2] is not None else None,
+        receiver_id=str(row[3]) if row[3] is not None else None,
+        currency=row[4],
+        status=row[5],
+        mode=row[6],
+    )
 
+
+def create_bank_transfer(payload: BankTransferRequest) -> BankTransferResponse:
     order_id = payload.order_id or uuid.uuid4()
 
     try:
@@ -75,12 +78,89 @@ def create_bank_transfer(payload: BankTransferRequest) -> BankTransferResponse:
             detail="BankTransfer is temporarily unavailable",
         ) from error
 
-    return BankTransferResponse(
-        order_id=str(transfer[0]),
-        account_detail=str(transfer[1]) if transfer[1] is not None else None,
-        sender_id=str(transfer[2]) if transfer[2] is not None else None,
-        receiver_id=str(transfer[3]) if transfer[3] is not None else None,
-        currency=transfer[4],
-        status=transfer[5],
-        mode=transfer[6],
-    )
+    return _row_to_response(transfer)
+
+
+def get_bank_transfer_by_id(order_id: UUID) -> BankTransferResponse | None:
+    try:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT OrderID, AccountDetail, Sender, Receiver, currency, status, Mode
+                    FROM BankTransfer
+                    WHERE OrderID = %s
+                    """,
+                    (order_id,),
+                )
+                transfer = cursor.fetchone()
+    except psycopg.Error as error:
+        logger.error(
+            "BankTransfer fetch failed (type=%s, sqlstate=%s)",
+            type(error).__name__,
+            error.sqlstate,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="BankTransfer is temporarily unavailable",
+        ) from error
+
+    return _row_to_response(transfer) if transfer is not None else None
+
+
+def get_bank_transfers_by_user(user_id: UUID) -> list[BankTransferResponse]:
+    try:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT OrderID, AccountDetail, Sender, Receiver, currency, status, Mode
+                    FROM BankTransfer
+                    WHERE AccountDetail = %s OR Sender = %s OR Receiver = %s
+                    """,
+                    (user_id, user_id, user_id),
+                )
+                rows = cursor.fetchall()
+    except psycopg.Error as error:
+        logger.error(
+            "BankTransfer list failed (type=%s, sqlstate=%s)",
+            type(error).__name__,
+            error.sqlstate,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="BankTransfer is temporarily unavailable",
+        ) from error
+
+    return [_row_to_response(row) for row in rows]
+
+
+def update_bank_transfer_status(
+    order_id: UUID,
+    new_status: str,
+) -> BankTransferResponse | None:
+    try:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE BankTransfer
+                    SET status = %s
+                    WHERE OrderID = %s
+                    RETURNING OrderID, AccountDetail, Sender, Receiver, currency, status, Mode
+                    """,
+                    (new_status, order_id),
+                )
+                transfer = cursor.fetchone()
+    except psycopg.Error as error:
+        logger.error(
+            "BankTransfer status update failed (type=%s, sqlstate=%s)",
+            type(error).__name__,
+            error.sqlstate,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="BankTransfer is temporarily unavailable",
+        ) from error
+
+    return _row_to_response(transfer) if transfer is not None else None

@@ -1,6 +1,6 @@
 # REST API Specification
 
-This document describes both the **currently implemented** endpoints in [`src/bank/api/Account/AccountRoutes.py`](../src/bank/api/Account/AccountRoutes.py) and [`src/bank/api/BankTransfer/BankTransferController.py`](../src/bank/api/BankTransfer/BankTransferController.py) and the **planned endpoints** for **Account Details Show**, **Bank Balance**, **Add Money**, **Credit**, **Debit**, **Transfer Money**, and **Transaction History**.
+This document describes both the **currently implemented** endpoints in [`src/bank/api/Account/AccountRoutes.py`](../src/bank/api/Account/AccountRoutes.py) and [`src/bank/api/BankTransfer/BankTransferRoutes.py`](../src/bank/api/BankTransfer/BankTransferRoutes.py) and the **planned endpoints** for **Account Details Show**, **Bank Balance**, **Add Money**, **Credit**, **Debit**, **Transfer Money**, and **Transaction History**.
 
 ---
 
@@ -9,7 +9,7 @@ This document describes both the **currently implemented** endpoints in [`src/ba
 | Feature | Method & Path | Status | Handler / Notes |
 |---|---|---|---|
 | Register User / Account Opening | `POST /user/create-accounts` | **Implemented** | [`account_opening`](../src/bank/api/Account/AccountRoutes.py#L9-L17) → [`create_bank_account`](../src/bank/api/Account/AccountService.py#L17-L63) |
-| Create Bank Transfer Order | `POST /bank-transfer/create` | **Implemented** | [`bank_transfer`](../src/bank/api/BankTransfer/BankTransferController.py#L10-L16) → [`create_bank_transfer`](../src/bank/api/BankTransfer/BankTransferService.py#L14-L78) |
+| Bank Transfer Orders (Create / Get / List / Status) | `POST /bank-transfer/create`, `GET /bank-transfer/{order_id}`, `GET /bank-transfer/user/{user_id}`, `PATCH /bank-transfer/{order_id}/status` | **Implemented** | [`BankTransferRoutes.py`](../src/bank/api/BankTransfer/BankTransferRoutes.py) → [`BankTransferController`](../src/bank/api/BankTransfer/BankTransferController.py) → [`BankTransferService.py`](../src/bank/api/BankTransfer/BankTransferService.py) |
 | Sign In / Token | `POST /auth/login` | Planned | Issues bearer session/JWT for `/users/me/*` routes |
 | **Account Details Show** | `GET /users/me` | Planned | Profile + active status + balance + activity summary |
 | Update Profile | `PATCH /users/me` | Planned | Updates allowed profile fields (`display_name`) |
@@ -111,9 +111,9 @@ Inserts a new `BankTransfer` order record in PostgreSQL and returns the persiste
 ```
 
 **Error Responses:**
-- `400 Bad Request`: `"Sender and receiver cannot be the same account"`
 - `404 Not Found`: `"Referenced user account does not exist"`
 - `409 Conflict`: `"A transfer with this order_id already exists"`
+- `422 Unprocessable Entity`: Pydantic validation error (missing account reference, `sender_id == receiver_id`, invalid `currency`/`status`/`mode`)
 - `503 Service Unavailable`: `"BankTransfer is temporarily unavailable"`
 
 ---

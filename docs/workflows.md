@@ -32,11 +32,10 @@ Executed in [`create_bank_account`](../src/bank/api/Account/AccountService.py#L1
 
 ## 2b. Bank Transfer Order Creation *(Implemented)*
 
-Executed in [`create_bank_transfer`](../src/bank/api/BankTransfer/BankTransferService.py#L14-L78):
+Executed in [`BankTransferController.create_transfer`](../src/bank/api/BankTransfer/BankTransferController.py#L16-L19) → [`create_bank_transfer`](../src/bank/api/BankTransfer/BankTransferService.py#L29-L78):
 
-1. Pydantic ([`BankTransferRequest`](../src/bank/api/BankTransfer/BankTransferValidator.py#L7-L23)) validates optional `order_id`, `account_detail`, `sender_id`, `receiver_id`, 3-letter `currency` (default `'INR'`), `status` (`'pending' | 'posted' | 'reversed' | 'failed'`), and `mode` (`max_length=20`).
-2. Rejects self-transfers (`sender_id == receiver_id` when both provided) with `400 Bad Request`.
-3. Generates `uuid.uuid4()` when `order_id` is omitted, inserts into `BankTransfer` with `RETURNING`, and maps `ForeignKeyViolation` (`404`), `UniqueViolation` (`409`), and `psycopg.Error` (`503`).
+1. Pydantic ([`BankTransferRequest`](../src/bank/api/BankTransfer/BankTransferValidator.py#L7-L43)) validates optional `order_id`, requires at least one of `account_detail`, `sender_id`, or `receiver_id`, rejects self-transfers (`sender_id == receiver_id`), and checks 3-letter `currency` (default `'INR'`), `status` (`'pending' | 'posted' | 'reversed' | 'failed'`), and `mode` (`max_length=20`), returning `422 Unprocessable Entity` on failure.
+2. Generates `uuid.uuid4()` when `order_id` is omitted, inserts into `BankTransfer` with `RETURNING`, and maps `ForeignKeyViolation` (`404`), `UniqueViolation` (`409`), and `psycopg.Error` (`503`).
 
 ---
 
