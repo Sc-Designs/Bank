@@ -29,7 +29,7 @@ def Account_Schema():
         """)
 
         conn.commit()
-        print("Table 'money' created successfully.")
+        print("user Table created successfully.")
 
     except Exception as e:
         if conn:

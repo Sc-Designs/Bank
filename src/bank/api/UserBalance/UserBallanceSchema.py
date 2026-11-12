@@ -11,14 +11,13 @@ def UserBallanceSchema():
             CREATE TABLE IF NOT EXISTS user_balance (
                 user_id UUID PRIMARY KEY,
                 balance NUMERIC(12, 2) NOT NULL DEFAULT 0.00 CHECK (balance >= 0),
-                transation UUID[] NOT NULL DEFAULT '{}',
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 FOREIGN KEY (user_id) REFERENCES user_acc(id) ON DELETE RESTRICT
             );
         """)
 
         conn.commit()
-        print("Table 'money' created successfully.")
+        print("user table created successfully.")
 
     except Exception as e:
         if conn:
