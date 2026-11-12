@@ -13,9 +13,8 @@ def BankTransfer_Schema():
                 AccountDetail UUID,
                 Sender UUID NULL,
                 Receiver UUID NULL,
-                currency CHAR(3) NOT NULL DEFAULT 'USD',
-                status TEXT NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending','posted','reversed','failed')),
+                currency CHAR(3) NOT NULL DEFAULT 'INR',
+                status TEXT NOT NULL DEFAULT 'pending',
                 Mode VARCHAR(20),
                 FOREIGN KEY (AccountDetail) REFERENCES user_acc(id),
                 FOREIGN KEY (Sender) REFERENCES user_acc(id),

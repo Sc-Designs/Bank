@@ -2,6 +2,7 @@ import os
 
 import uvicorn
 
+
 def main() -> None:
     host = os.getenv("BANK_HOST", "127.0.0.1")
     port = int(os.getenv("BANK_PORT", "8000"))

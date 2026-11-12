@@ -17,7 +17,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
     except ValueError:
         return False
 
-    if algorithm != "scyrpt" :
+    if algorithm != "scyrpt":
         return False
 
     try:
@@ -33,5 +33,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
     If yes then return True and if not then return False
     """
 
-    actual_digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1)
+    actual_digest = hashlib.scrypt(
+        password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1
+    )
     return secrets.compare_digest(actual_digest, expected_digest)

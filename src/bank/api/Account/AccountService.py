@@ -8,8 +8,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from .AccountSchema import Account_Schema
 
-def create_bank_account(payload: bank_account_register_request) -> bank_account_register_response:
+
+Account_Schema()
+
+
+def create_bank_account(
+    payload: bank_account_register_request,
+) -> bank_account_register_response:
     password_digest = hash_password(payload.password)
 
     try:
@@ -21,7 +28,7 @@ def create_bank_account(payload: bank_account_register_request) -> bank_account_
                     VALUES (%s, %s, %s)
                     RETURNING id, email, display_name
                     """,
-                    (payload.email, payload.display_name, password_digest)
+                    (payload.email, payload.display_name, password_digest),
                 )
                 user = cursor.fetchone()
                 if user is None:
@@ -37,16 +44,16 @@ def create_bank_account(payload: bank_account_register_request) -> bank_account_
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists",
-            ) from error
+        ) from error
     except psycopg.Error as error:
         logger.error(
-        "Registration database operation failed (type=%s, sqlstate=%s)",
-        type(error).__name__,
-        error.sqlstate,
+            "Registration database operation failed (type=%s, sqlstate=%s)",
+            type(error).__name__,
+            error.sqlstate,
         )
         raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Registration is temporarily unavailable",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registration is temporarily unavailable",
         ) from error
 
     return bank_account_register_response(
