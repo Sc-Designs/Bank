@@ -94,16 +94,19 @@ A balance is a **current-value summary**; `balance_transactions` is the **author
 
 ## 4. Database Design & Table Relationships
 
-The schema uses three PostgreSQL tables (full DDL in [`docs/schema.sql`](docs/schema.sql) and detailed guide in [`docs/database.md`](docs/database.md)):
+The schema uses four PostgreSQL tables (full DDL in [`docs/schema.sql`](docs/schema.sql), Python table helpers in [`src/bank/api/User Balance/UserBallanceSchema.py`](src/bank/api/User%20Balance/UserBallanceSchema.py) & [`src/bank/api/BankTransfer/MoneySchema.py`](src/bank/api/BankTransfer/MoneySchema.py), and detailed guide in [`docs/database.md`](docs/database.md)):
 
 ```text
-user_acc (1) ───── (1) user_balance
+user_acc (1) ───── (1) user_balance  [transation UUID[] stores BankTransfer(OrderID) UUIDs]
+    │
+    ├───────────── (*) BankTransfer  [OrderID, AccountDetail, Sender, Receiver]
     │
     └───────────── (*) balance_transactions  [user_id & optional counterparty_user_id]
 ```
 
 - **`user_acc`**: Profile identity (`id` UUID primary key via `gen_random_uuid()`, unique lowercase `email`, `display_name`, `scrypt` `password_hash`, `is_active`).
-- **`user_balance`**: Exactly one row per user (`user_id` PK/FK, `balance NUMERIC(12, 2) CHECK (balance >= 0)`). Never use `FLOAT` or `REAL` for money.
+- **`user_balance`**: Exactly one row per user (`user_id` PK/FK, `balance NUMERIC(12, 2) CHECK (balance >= 0)`, `transation UUID[] NOT NULL DEFAULT '{}'`). Never use `FLOAT` or `REAL` for money; validate `BankTransfer(OrderID)` references in application transactions since PostgreSQL does not support `FOREIGN KEY` constraints on array elements.
+- **`BankTransfer`**: Transfer orders (`OrderID` UUID PK, `AccountDetail`, `Sender`, `Receiver` UUID FKs to `user_acc(id)`, `currency`, `status`, `Mode`).
 - **`balance_transactions`**: Append-only ledger (`id`, `user_id`, `transaction_type IN ('credit', 'debit')`, `operation_kind IN ('add_money', 'credit', 'debit', 'transfer')`, positive `amount NUMERIC(12, 2) CHECK (amount > 0)`, optional `counterparty_user_id`, `reference_id`, `idempotency_key`, `occurred_at TIMESTAMPTZ`, `note`).
 
 ---

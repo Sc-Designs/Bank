@@ -1,6 +1,6 @@
 # Database Design & SQL Cookbook
 
-This project uses **PostgreSQL** with a strict, three-table relational schema defined in [`docs/schema.sql`](schema.sql).
+This project uses **PostgreSQL** with a four-table relational schema defined in [`docs/schema.sql`](schema.sql) (along with Python schema helpers in [`src/bank/api/User Balance/UserBallanceSchema.py`](../src/bank/api/User%20Balance/UserBallanceSchema.py) and [`src/bank/api/BankTransfer/MoneySchema.py`](../src/bank/api/BankTransfer/MoneySchema.py)).
 
 ---
 
@@ -9,6 +9,7 @@ This project uses **PostgreSQL** with a strict, three-table relational schema de
 ```mermaid
 erDiagram
     user_acc ||--|| user_balance : "has exactly one"
+    user_acc ||--o{ BankTransfer : "account / sender / receiver"
     user_acc ||--o{ balance_transactions : "owns"
     user_acc ||--o{ balance_transactions : "counterparty (transfers)"
 
@@ -25,7 +26,18 @@ erDiagram
     user_balance {
         UUID user_id PK,FK
         NUMERIC(12_2) balance
+        UUID_ARRAY transation
         TIMESTAMPTZ updated_at
+    }
+
+    BankTransfer {
+        UUID OrderID PK
+        UUID AccountDetail FK
+        UUID Sender FK
+        UUID Receiver FK
+        CHAR(3) currency
+        TEXT status
+        VARCHAR(20) Mode
     }
 
     balance_transactions {
@@ -44,7 +56,8 @@ erDiagram
 
 ### Cardinality Summary
 
-- **`user_acc` (1) ─── (1) `user_balance`**: Every active user has one balance row created atomically during registration.
+- **`user_acc` (1) ─── (1) `user_balance`**: Every active user has one balance row created atomically during registration, with `transation` holding an array of `BankTransfer(OrderID)` UUIDs.
+- **`user_acc` (1) ─── (\*) `BankTransfer`**: Transfer orders linking `AccountDetail`, `Sender`, and `Receiver` to `user_acc(id)`.
 - **`user_acc` (1) ─── (\*) `balance_transactions`**: Append-only financial ledger recording every **Add Money**, **Credit**, **Debit**, and **Transfer Money** event.
 
 ---
@@ -69,7 +82,20 @@ erDiagram
 |---|---|---|---|
 | `user_id` | `UUID` | `PRIMARY KEY REFERENCES user_acc(id) ON DELETE RESTRICT` | One-to-one link to account |
 | `balance` | `NUMERIC(12, 2)` | `NOT NULL DEFAULT 0.00 CHECK (balance >= 0)` | Current balance in rupees (nonnegative; prevents overdrafts) |
+| `transation` | `UUID[]` | `NOT NULL DEFAULT '{}'` | Array of `BankTransfer(OrderID)` UUIDs associated with this balance (validated in application transactions since PostgreSQL does not support `FOREIGN KEY` constraints on array elements) |
 | `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` | Timestamp of the last balance mutation |
+
+### `BankTransfer` — Transfer Orders
+
+| Column | Type | Constraints | Purpose |
+|---|---|---|---|
+| `OrderID` | `UUID` | `PRIMARY KEY` | Unique transfer order identifier |
+| `AccountDetail` | `UUID` | `REFERENCES user_acc(id)` | Account associated with the transfer |
+| `Sender` | `UUID` | `NULL REFERENCES user_acc(id)` | Sending user account ID |
+| `Receiver` | `UUID` | `NULL REFERENCES user_acc(id)` | Receiving user account ID |
+| `currency` | `CHAR(3)` | `NOT NULL DEFAULT 'USD'` | ISO 4217 currency code |
+| `status` | `TEXT` | `NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','posted','reversed','failed'))` | Transfer lifecycle status |
+| `Mode` | `VARCHAR(20)` | `NULL` | Transfer channel / payment mode |
 
 ### `balance_transactions` — Append-Only Financial Ledger
 
@@ -109,6 +135,9 @@ erDiagram
 If `user_acc`, `user_balance`, and the earlier minimal `balance_transactions` already exist, do **not** drop `user_acc`. Add only the missing columns and indexes safely:
 
 ```sql
+ALTER TABLE user_balance
+    ADD COLUMN IF NOT EXISTS transation UUID[] NOT NULL DEFAULT '{}';
+
 ALTER TABLE balance_transactions
     ADD COLUMN IF NOT EXISTS operation_kind VARCHAR(20) NOT NULL DEFAULT 'credit'
         CHECK (operation_kind IN ('add_money', 'credit', 'debit', 'transfer')),

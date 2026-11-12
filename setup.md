@@ -200,6 +200,7 @@ The expected application tables are:
 
 - `user_acc`
 - `user_balance`
+- `BankTransfer`
 - `balance_transactions`
 
 The schema may also enable `pgcrypto`, for example when it uses `gen_random_uuid()`.

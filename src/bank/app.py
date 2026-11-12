@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+
 import logging
 
 from fastapi import FastAPI
@@ -10,22 +10,28 @@ from .api.Account.AccountRoutes import route as account_opening
 logger = logging.getLogger("uvicorn.error")
 
 
-@asynccontextmanager
-async def lifespan(application: FastAPI):
-    with get_connection() as connection:
-        connection.execute("SELECT 1")
-    logger.info("PostgreSQL startup check succeeded")
-    yield
-
-
 def create_app() -> FastAPI:
     application = FastAPI(
         title="Simple Bank CRUD API",
         version="0.1.0",
         description="Learning-project banking API with FastAPI and PostgreSQL.",
-        lifespan=lifespan,
     )
+
+    @application.on_event("startup")
+    async def startup():
+        try:
+            connection =  get_connection()
+            connection.execute("SELECT 1")
+            connection.close()
+
+            logger.info("PostgreSQL connected successfully")
+
+        except Exception:
+            logger.exception("PostgreSQL connection failed")
+            raise
+
     application.include_router(api_router)
+
     return application
 
 
