@@ -1,5 +1,7 @@
-from ...db.db import get_connection
 from pydantic import BaseModel
+
+from ...db.db import get_connection
+
 
 def BankTransfer_Schema():
     conn = None
@@ -14,7 +16,8 @@ def BankTransfer_Schema():
                 Sender UUID NULL,
                 Receiver UUID NULL,
                 currency CHAR(3) NOT NULL DEFAULT 'INR',
-                status TEXT NOT NULL DEFAULT 'pending',
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'posted', 'reversed', 'failed')),
                 Mode VARCHAR(20),
                 FOREIGN KEY (AccountDetail) REFERENCES user_acc(id),
                 FOREIGN KEY (Sender) REFERENCES user_acc(id),
@@ -23,7 +26,7 @@ def BankTransfer_Schema():
         """)
 
         conn.commit()
-        print("Table 'money' created successfully.")
+        print("Table 'BankTransfer' created successfully.")
 
     except Exception as e:
         if conn:
@@ -34,10 +37,12 @@ def BankTransfer_Schema():
         if conn:
             conn.close()
 
-class money_responce(BaseModel):
+
+class BankTransferResponse(BaseModel):
     order_id: str
-    reciver_id: str
-    sender_id: str
+    account_detail: str | None = None
+    sender_id: str | None = None
+    receiver_id: str | None = None
     currency: str
     status: str
-    mode: str
+    mode: str | None = None

@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS BankTransfer (
     AccountDetail UUID,
     Sender UUID NULL,
     Receiver UUID NULL,
-    currency CHAR(3) NOT NULL DEFAULT 'USD',
+    currency CHAR(3) NOT NULL DEFAULT 'INR',
     status TEXT NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'posted', 'reversed', 'failed')),
     Mode VARCHAR(20),

@@ -1,6 +1,6 @@
 # REST API Specification
 
-This document describes both the **currently implemented** endpoint in [`src/bank/router/user_router.py`](../src/bank/router/user_router.py) and the **planned endpoints** for **Account Details Show**, **Bank Balance**, **Add Money**, **Credit**, **Debit**, **Transfer Money**, and **Transaction History**.
+This document describes both the **currently implemented** endpoints in [`src/bank/api/Account/AccountRoutes.py`](../src/bank/api/Account/AccountRoutes.py) and [`src/bank/api/BankTransfer/BankTransferController.py`](../src/bank/api/BankTransfer/BankTransferController.py) and the **planned endpoints** for **Account Details Show**, **Bank Balance**, **Add Money**, **Credit**, **Debit**, **Transfer Money**, and **Transaction History**.
 
 ---
 
@@ -8,7 +8,8 @@ This document describes both the **currently implemented** endpoint in [`src/ban
 
 | Feature | Method & Path | Status | Handler / Notes |
 |---|---|---|---|
-| Register User | `POST /users/register` | **Implemented** | [`create_user`](../src/bank/router/user_router.py#L12-L18) → [`register_user`](../src/bank/controller/user_controller.py#L40-L70) |
+| Register User / Account Opening | `POST /user/create-accounts` | **Implemented** | [`account_opening`](../src/bank/api/Account/AccountRoutes.py#L9-L17) → [`create_bank_account`](../src/bank/api/Account/AccountService.py#L17-L63) |
+| Create Bank Transfer Order | `POST /bank-transfer/create` | **Implemented** | [`bank_transfer`](../src/bank/api/BankTransfer/BankTransferController.py#L10-L16) → [`create_bank_transfer`](../src/bank/api/BankTransfer/BankTransferService.py#L14-L78) |
 | Sign In / Token | `POST /auth/login` | Planned | Issues bearer session/JWT for `/users/me/*` routes |
 | **Account Details Show** | `GET /users/me` | Planned | Profile + active status + balance + activity summary |
 | Update Profile | `PATCH /users/me` | Planned | Updates allowed profile fields (`display_name`) |
@@ -38,22 +39,22 @@ This document describes both the **currently implemented** endpoint in [`src/ban
 | `401 Unauthorized` | Missing/invalid credentials | Unauthenticated call to a `/users/me/*` endpoint |
 | `404 Not Found` | Resource missing | Target recipient email/ID does not exist or is inactive |
 | `409 Conflict` | State conflict | Duplicate email on registration, insufficient funds for debit/transfer, duplicate idempotency key mismatch |
-| `422 Unprocessable Entity` | Schema validation failed | Invalid email, short password (`< 12` chars), negative/zero amount, `> 2` decimal places |
+| `422 Unprocessable Entity` | Schema validation failed | Invalid email, invalid password length (`8–20`), negative/zero amount, invalid `currency` / `status` / `mode` |
 | `503 Service Unavailable` | Database unavailable | PostgreSQL connection or transient DB failure |
 
 ---
 
-## 1. User Registration *(Implemented)*
+## 1. User Registration / Account Opening *(Implemented)*
 
-### `POST /users/register`
+### `POST /user/create-accounts`
 
 Creates a new `user_acc` row (with `scrypt`-hashed password) and an initial `0.00` `user_balance` row atomically.
 
-**Validation Rules** (enforced by [`RegisterUserRequest`](../src/bank/controller/user_controller.py#L12-L26)):
+**Validation Rules** (enforced by [`bank_account_register_request`](../src/bank/api/Account/AccountValidator.py#L6-L19)):
 - Whitespace is stripped from all string fields (`str_strip_whitespace=True`).
-- `email`: `3–254` chars, lowercased, validated with regex `[^\s@]+@[^\s@]+\.[^\s@]+`.
-- `display_name`: `1–100` chars.
-- `password`: `12–128` chars (never returned or logged).
+- `email`: `12–20` chars, lowercased, validated with regex `[^\s@]+@[^\s@]+\.[^\s@]+`.
+- `display_name`: `3–20` chars.
+- `password`: `8–20` chars (never returned or logged).
 
 **Request Body:**
 
@@ -61,11 +62,11 @@ Creates a new `user_acc` row (with `scrypt`-hashed password) and an initial `0.0
 {
   "email": "alice@example.com",
   "display_name": "Alice",
-  "password": "SuperSecurePassword123"
+  "password": "StrongPass123"
 }
 ```
 
-**Response `201 Created`** ([`RegisteredUserResponse`](../src/bank/controller/user_controller.py#L28-L32)):
+**Response `201 Created`** ([`bank_account_register_response`](../src/bank/api/Account/AccountSchema.py#L4-L7)):
 
 ```json
 {
@@ -79,6 +80,41 @@ Creates a new `user_acc` row (with `scrypt`-hashed password) and an initial `0.0
 - `409 Conflict`: `"An account with this email already exists"`
 - `422 Unprocessable Entity`: Pydantic validation error
 - `503 Service Unavailable`: `"Registration is temporarily unavailable"`
+
+---
+
+## 1b. Bank Transfer Order Creation *(Implemented)*
+
+### `POST /bank-transfer/create`
+
+Inserts a new `BankTransfer` order record in PostgreSQL and returns the persisted order summary.
+
+**Validation Rules** (enforced by [`BankTransferRequest`](../src/bank/api/BankTransfer/BankTransferValidator.py#L7-L23)):
+- `order_id`: Optional `UUID` (auto-generated via `uuid.uuid4()` if omitted).
+- `account_detail`, `sender_id`, `receiver_id`: Optional `UUID` references to `user_acc(id)`.
+- `currency`: 3-letter ISO code (`"INR"` default, uppercased).
+- `status`: `"pending"` (default), `"posted"`, `"reversed"`, or `"failed"`.
+- `mode`: Optional string up to 20 chars.
+
+**Response `201 Created`** ([`BankTransferResponse`](../src/bank/api/BankTransfer/BankTransferSchema.py#L38-L45)):
+
+```json
+{
+  "order_id": "e4c19a70-21b0-4f88-90b5-9876543210ff",
+  "account_detail": "b6d9f3a2-8c1e-4b7d-9a4e-1234567890ab",
+  "sender_id": "b6d9f3a2-8c1e-4b7d-9a4e-1234567890ab",
+  "receiver_id": "c7a8e1d4-3b2a-4c6e-8f1a-0987654321cd",
+  "currency": "INR",
+  "status": "pending",
+  "mode": "UPI"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: `"Sender and receiver cannot be the same account"`
+- `404 Not Found`: `"Referenced user account does not exist"`
+- `409 Conflict`: `"A transfer with this order_id already exists"`
+- `503 Service Unavailable`: `"BankTransfer is temporarily unavailable"`
 
 ---
 

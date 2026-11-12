@@ -1,6 +1,6 @@
 # Database Design & SQL Cookbook
 
-This project uses **PostgreSQL** with a four-table relational schema defined in [`docs/schema.sql`](schema.sql) (along with Python schema helpers in [`src/bank/api/User Balance/UserBallanceSchema.py`](../src/bank/api/User%20Balance/UserBallanceSchema.py) and [`src/bank/api/BankTransfer/MoneySchema.py`](../src/bank/api/BankTransfer/MoneySchema.py)).
+This project uses **PostgreSQL** with a four-table relational schema defined in [`docs/schema.sql`](schema.sql) (along with Python schema helpers in [`src/bank/api/User Balance/UserBallanceSchema.py`](../src/bank/api/User%20Balance/UserBallanceSchema.py) and [`src/bank/api/BankTransfer/BankTransferSchema.py`](../src/bank/api/BankTransfer/BankTransferSchema.py)).
 
 ---
 
@@ -93,7 +93,7 @@ erDiagram
 | `AccountDetail` | `UUID` | `REFERENCES user_acc(id)` | Account associated with the transfer |
 | `Sender` | `UUID` | `NULL REFERENCES user_acc(id)` | Sending user account ID |
 | `Receiver` | `UUID` | `NULL REFERENCES user_acc(id)` | Receiving user account ID |
-| `currency` | `CHAR(3)` | `NOT NULL DEFAULT 'USD'` | ISO 4217 currency code |
+| `currency` | `CHAR(3)` | `NOT NULL DEFAULT 'INR'` | ISO 4217 currency code |
 | `status` | `TEXT` | `NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','posted','reversed','failed'))` | Transfer lifecycle status |
 | `Mode` | `VARCHAR(20)` | `NULL` | Transfer channel / payment mode |
 
@@ -160,7 +160,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS balance_transactions_idempotency_uidx
 
 > **Important:** Always use parameterized queries (`%s` placeholders in `psycopg`). Never interpolate user input directly into SQL strings.
 
-### 5.1 User Registration (Implemented in `src/bank/controller/user_controller.py`)
+### 5.1 User Registration (Implemented in `src/bank/api/Account/AccountService.py`)
 
 Creates the user and zero-balance row in one transaction:
 
