@@ -11,6 +11,7 @@ class BankTransferRequest(BaseModel):
     account_detail: UUID | None = None
     sender_id: UUID | None = None
     receiver_id: UUID | None = None
+    amount: float
     currency: str = Field(default="INR", min_length=3, max_length=3)
     status: Literal["pending", "posted", "reversed", "failed"] = "pending"
     mode: str | None = Field(default=None, max_length=20)
