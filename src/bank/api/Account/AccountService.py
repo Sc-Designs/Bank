@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 from .AccountSchema import Account_Schema
 
 
+from ...api.UserBalance import UserService
+
+
 Account_Schema()
 
 
@@ -36,9 +39,9 @@ def create_bank_account(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail="Registration failed to create user record",
                     )
-                cursor.execute(
-                    "INSERT INTO user_balance (user_id, balance) VALUES (%s, 0.00)",
-                    (user[0],),
+                UserService.UserBalanceService.create_balance_account(
+                    user[0],
+                    cursor=cursor,
                 )
     except psycopg.errors.UniqueViolation as error:
         raise HTTPException(
