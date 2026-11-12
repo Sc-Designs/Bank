@@ -1,5 +1,5 @@
 from ...db.db import get_connection
-
+from pydantic import BaseModel
 
 def BankTransfer_Schema():
     conn = None
@@ -33,3 +33,11 @@ def BankTransfer_Schema():
     finally:
         if conn:
             conn.close()
+
+class money_responce(BaseModel):
+    order_id: str
+    reciver_id: str
+    sender_id: str
+    currency: str
+    status: str
+    mode: str
