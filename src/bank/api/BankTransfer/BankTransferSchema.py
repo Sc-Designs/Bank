@@ -15,7 +15,7 @@ def BankTransfer_Schema():
                 AccountDetail UUID,
                 Sender UUID NULL,
                 Receiver UUID NULL,
-                Amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00 CHECK (balance >= 0),
+                amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00 CHECK (amount >= 0),
                 currency CHAR(3) NOT NULL DEFAULT 'INR',
                 status TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending', 'posted', 'reversed', 'failed')),
