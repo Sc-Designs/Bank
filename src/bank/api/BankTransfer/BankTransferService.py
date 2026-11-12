@@ -20,9 +20,10 @@ def _row_to_response(row: tuple) -> BankTransferResponse:
         account_detail=str(row[1]) if row[1] is not None else None,
         sender_id=str(row[2]) if row[2] is not None else None,
         receiver_id=str(row[3]) if row[3] is not None else None,
-        currency=row[4],
-        status=row[5],
-        mode=row[6],
+        amount=float(row[4]),
+        currency=row[5],
+        status=row[6],
+        mode=row[7],
     )
 
 
@@ -36,16 +37,17 @@ def create_bank_transfer(payload: BankTransferRequest) -> BankTransferResponse:
                     """
                     INSERT INTO BankTransfer (
                         OrderID, AccountDetail, Sender, Receiver,
-                        currency, status, Mode
+                        amount, currency, status, Mode
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    RETURNING OrderID, AccountDetail, Sender, Receiver, currency, status, Mode
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING OrderID, AccountDetail, Sender, Receiver, Amount, currency, status, Mode
                     """,
                     (
                         order_id,
                         payload.account_detail,
                         payload.sender_id,
                         payload.receiver_id,
+                        payload.amount,
                         payload.currency,
                         payload.status,
                         payload.mode,
@@ -87,7 +89,7 @@ def get_bank_transfer_by_id(order_id: UUID) -> BankTransferResponse | None:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT OrderID, AccountDetail, Sender, Receiver, currency, status, Mode
+                    SELECT OrderID, AccountDetail, Sender, Receiver, Amount, currency, status, Mode
                     FROM BankTransfer
                     WHERE OrderID = %s
                     """,
@@ -114,7 +116,7 @@ def get_bank_transfers_by_user(user_id: UUID) -> list[BankTransferResponse]:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT OrderID, AccountDetail, Sender, Receiver, currency, status, Mode
+                    SELECT OrderID, AccountDetail, Sender, Receiver, Amount, currency, status, Mode
                     FROM BankTransfer
                     WHERE AccountDetail = %s OR Sender = %s OR Receiver = %s
                     """,
@@ -147,7 +149,7 @@ def update_bank_transfer_status(
                     UPDATE BankTransfer
                     SET status = %s
                     WHERE OrderID = %s
-                    RETURNING OrderID, AccountDetail, Sender, Receiver, currency, status, Mode
+                    RETURNING OrderID, AccountDetail, Sender, Receiver, Amount, currency, status, Mode
                     """,
                     (new_status, order_id),
                 )
