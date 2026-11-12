@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from .db.db import get_connection
 from .router import api_router
 from .api.Account.AccountRoutes import route as account_opening
-from .api.BankTransfer.BankTransferController import route as bank_transfer_router
+from .api.BankTransfer.BankTransferRoutes import route as bank_transfer_router
 
 logger = logging.getLogger("uvicorn.error")
 

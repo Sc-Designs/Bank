@@ -30,7 +30,8 @@ Bank/
         ├── api/
         │   ├── Account/               # Account routes, schemas, service, utils & validators
         │   ├── BankTransfer/
-        │   │   ├── BankTransferController.py  # Bank transfer API routes
+        │   │   ├── BankTransferController.py  # Bank transfer controller layer
+        │   │   ├── BankTransferRoutes.py      # Bank transfer FastAPI routes
         │   │   ├── BankTransferSchema.py      # PostgreSQL DDL & response schema for BankTransfer
         │   │   ├── BankTransferService.py     # Bank transfer DB operations
         │   │   └── BankTransferValidator.py   # Request validation for BankTransfer
@@ -56,8 +57,9 @@ The codebase follows a **Router / Controller → Service / Validator → Databas
 
 ```mermaid
 flowchart LR
-    Client["HTTP Client / Swagger UI"] --> Router["AccountRoutes / BankTransferController"]
-    Router --> Service["*Service.py (Validation & Transactions)"]
+    Client["HTTP Client / Swagger UI"] --> Router["AccountRoutes / BankTransferRoutes"]
+    Router --> Controller["BankTransferController / Direct Service"]
+    Controller --> Service["*Service.py (Validation & Transactions)"]
     Service --> DB["db/db.py (psycopg.Connection)"]
     DB --> PG[("PostgreSQL")]
     Config["config/config.py (.env Settings)"] -.-> DB
@@ -68,7 +70,8 @@ flowchart LR
 | **App Factory & Entry** | [`src/bank/app.py`](../src/bank/app.py), [`src/bank/main.py`](../src/bank/main.py), [`src/bank/__init__.py`](../src/bank/__init__.py) | Instantiates `FastAPI`, mounts routers, and runs startup DB check |
 | **Config** | [`src/bank/config/config.py`](../src/bank/config/config.py) | Loads `POSTGRES_CONFIG` from `.env` via `pydantic-settings` |
 | **Database** | [`src/bank/db/db.py`](../src/bank/db/db.py) | Provides `get_connection() -> psycopg.Connection` |
-| **Routes / Controllers** | [`src/bank/api/Account/AccountRoutes.py`](../src/bank/api/Account/AccountRoutes.py), [`src/bank/api/BankTransfer/BankTransferController.py`](../src/bank/api/BankTransfer/BankTransferController.py) | Defines HTTP verbs, paths, status codes, and response models |
+| **Routes** | [`src/bank/api/Account/AccountRoutes.py`](../src/bank/api/Account/AccountRoutes.py), [`src/bank/api/BankTransfer/BankTransferRoutes.py`](../src/bank/api/BankTransfer/BankTransferRoutes.py) | Defines HTTP verbs, paths, status codes, and response models |
+| **Controllers** | [`src/bank/api/BankTransfer/BankTransferController.py`](../src/bank/api/BankTransfer/BankTransferController.py) | Orchestrates validation/business rules between routes and services |
 | **Services** | [`src/bank/api/Account/AccountService.py`](../src/bank/api/Account/AccountService.py), [`src/bank/api/BankTransfer/BankTransferService.py`](../src/bank/api/BankTransfer/BankTransferService.py) | Business logic, DB transaction orchestration, and error mapping |
 | **Validators & Schemas** | [`AccountValidator.py`](../src/bank/api/Account/AccountValidator.py), [`AccountSchema.py`](../src/bank/api/Account/AccountSchema.py), [`BankTransferValidator.py`](../src/bank/api/BankTransfer/BankTransferValidator.py), [`BankTransferSchema.py`](../src/bank/api/BankTransfer/BankTransferSchema.py), [`UserBallanceSchema.py`](../src/bank/api/User%20Balance/UserBallanceSchema.py) | Pydantic request/response models and PostgreSQL table DDL helpers |
 | **Utilities** | [`src/bank/utils/hashing_pass.py`](../src/bank/utils/hashing_pass.py) | Reusable `scrypt` password hashing and verification |

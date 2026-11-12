@@ -39,7 +39,7 @@ A learning-focused banking backend built with **FastAPI**, **PostgreSQL**, **`ps
 | Capability | Status | Location / Endpoint |
 |---|---|---|
 | Account Opening / User Registration + Zero Balance | **Implemented** | `POST /user/create-accounts` ([`AccountRoutes.py`](src/bank/api/Account/AccountRoutes.py), [`AccountService.py`](src/bank/api/Account/AccountService.py)) |
-| Bank Transfer Order Creation | **Implemented** | `POST /bank-transfer/create` ([`BankTransferController.py`](src/bank/api/BankTransfer/BankTransferController.py), [`BankTransferService.py`](src/bank/api/BankTransfer/BankTransferService.py)) |
+| Bank Transfer Order Management | **Implemented** | `POST /bank-transfer/create`, `GET /bank-transfer/{order_id}`, `GET /bank-transfer/user/{user_id}`, `PATCH /bank-transfer/{order_id}/status` ([`BankTransferRoutes.py`](src/bank/api/BankTransfer/BankTransferRoutes.py), [`BankTransferController.py`](src/bank/api/BankTransfer/BankTransferController.py), [`BankTransferService.py`](src/bank/api/BankTransfer/BankTransferService.py)) |
 | Authentication (`login` / bearer token) | Planned | `POST /auth/login` |
 | **Account Details Show** & Profile Update | Planned | `GET /users/me`, `PATCH /users/me`, `DELETE /users/me` |
 | **Bank Balance** | Planned | `GET /users/me/balance` |
