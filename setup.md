@@ -331,12 +331,12 @@ If your tests use `TestClient`, `httpx` must be installed.
 Example request using `curl` (adjust the JSON fields to match your actual request schema):
 
 ```bash
-curl -i -X POST http://127.0.0.1:8000/users/register \
+curl -i -X POST http://127.0.0.1:8000/user/create-accounts \
   -H "Content-Type: application/json" \
   -d '{
     "email": "alice@example.com",
     "display_name": "Alice",
-    "password": "Use-A-Development-Password"
+    "password": "StrongPass123"
   }'
 ```
 

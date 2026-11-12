@@ -18,7 +18,7 @@ A learning-focused banking backend built with **FastAPI**, **PostgreSQL**, **`ps
 | Document | Description |
 |---|---|
 | **[`setup.md`](setup.md)** | Complete setup guide: `uv` vs `pip`, `uv add` commands, PostgreSQL, `.env`, VS Code setup & debugging |
-| **[`docs/api.md`](docs/api.md)** | Full REST API specification (implemented `POST /users/register` + all planned endpoints) |
+| **[`docs/api.md`](docs/api.md)** | Full REST API specification (implemented `POST /user/create-accounts` & `POST /bank-transfer/create` + planned endpoints) |
 | **[`docs/database.md`](docs/database.md)** | ER diagram, column dictionary, schema migration, and atomic SQL cookbook |
 | **[`docs/schema.sql`](docs/schema.sql)** | Executable PostgreSQL DDL script |
 | **[`docs/workflows.md`](docs/workflows.md)** | Sequence diagrams, row locking, deadlock avoidance, and edge-case rules |
@@ -38,8 +38,8 @@ A learning-focused banking backend built with **FastAPI**, **PostgreSQL**, **`ps
 
 | Capability | Status | Location / Endpoint |
 |---|---|---|
-| Health Check | **Implemented** | `GET /health` ([`health_router.py`](src/bank/router/health_router.py)) |
-| User Registration + Zero Balance | **Implemented** | `POST /users/register` ([`user_router.py`](src/bank/router/user_router.py), [`user_controller.py`](src/bank/controller/user_controller.py)) |
+| Account Opening / User Registration + Zero Balance | **Implemented** | `POST /user/create-accounts` ([`AccountRoutes.py`](src/bank/api/Account/AccountRoutes.py), [`AccountService.py`](src/bank/api/Account/AccountService.py)) |
+| Bank Transfer Order Creation | **Implemented** | `POST /bank-transfer/create` ([`BankTransferController.py`](src/bank/api/BankTransfer/BankTransferController.py), [`BankTransferService.py`](src/bank/api/BankTransfer/BankTransferService.py)) |
 | Authentication (`login` / bearer token) | Planned | `POST /auth/login` |
 | **Account Details Show** & Profile Update | Planned | `GET /users/me`, `PATCH /users/me`, `DELETE /users/me` |
 | **Bank Balance** | Planned | `GET /users/me/balance` |
@@ -74,7 +74,7 @@ uv run bank
 # or: uv run fastapi dev src/bank/__init__.py
 ```
 
-Open Swagger UI at `http://127.0.0.1:8000/docs` to test `POST /users/register`.
+Open Swagger UI at `http://127.0.0.1:8000/docs` to test `POST /user/create-accounts` and `POST /bank-transfer/create`.
 
 ---
 
@@ -94,7 +94,7 @@ A balance is a **current-value summary**; `balance_transactions` is the **author
 
 ## 4. Database Design & Table Relationships
 
-The schema uses four PostgreSQL tables (full DDL in [`docs/schema.sql`](docs/schema.sql), Python table helpers in [`src/bank/api/User Balance/UserBallanceSchema.py`](src/bank/api/User%20Balance/UserBallanceSchema.py) & [`src/bank/api/BankTransfer/MoneySchema.py`](src/bank/api/BankTransfer/MoneySchema.py), and detailed guide in [`docs/database.md`](docs/database.md)):
+The schema uses four PostgreSQL tables (full DDL in [`docs/schema.sql`](docs/schema.sql), Python table helpers in [`src/bank/api/User Balance/UserBallanceSchema.py`](src/bank/api/User%20Balance/UserBallanceSchema.py) & [`src/bank/api/BankTransfer/BankTransferSchema.py`](src/bank/api/BankTransfer/BankTransferSchema.py), and detailed guide in [`docs/database.md`](docs/database.md)):
 
 ```text
 user_acc (1) ───── (1) user_balance  [transation UUID[] stores BankTransfer(OrderID) UUIDs]
@@ -222,7 +222,8 @@ LIMIT 50;
 
 Full request/response schemas, validation rules, and error payloads are documented in **[`docs/api.md`](docs/api.md)**.
 
-- `POST /users/register` *(Implemented)* — Register user + create `0.00` balance atomically.
+- `POST /user/create-accounts` *(Implemented)* — Register user + create `0.00` balance atomically.
+- `POST /bank-transfer/create` *(Implemented)* — Create a `BankTransfer` order record.
 - `POST /auth/login` *(Planned)* — Authenticate and issue access token.
 - `GET /users/me` *(Planned)* — **Account Details Show** (profile, status, balance, summary).
 - `PATCH /users/me` *(Planned)* — Update allowed profile fields.
@@ -240,7 +241,7 @@ Full request/response schemas, validation rules, and error payloads are document
 ## 8. Implementation Order
 
 1. Confirm PostgreSQL is installed and apply [`docs/schema.sql`](docs/schema.sql) (see [`setup.md`](setup.md)).
-2. Keep existing atomic registration (`POST /users/register`) and add login/auth (`get_current_user`).
+2. Keep existing atomic registration (`POST /user/create-accounts`) and add login/auth (`get_current_user`).
 3. Implement **Account Details Show** (`GET /users/me`) and **Bank Balance** (`GET /users/me/balance`).
 4. Implement paginated transaction history (`GET /users/me/transactions`) with page-size cap and stable keyset cursor.
 5. Implement **Add Money**, **Credit**, and **Debit** service logic with `FOR UPDATE` locking, validation, and idempotency keys.

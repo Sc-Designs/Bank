@@ -19,14 +19,24 @@ This document details how each core banking operation executes end-to-end across
 
 ## 2. User Registration *(Implemented)*
 
-Executed in [`register_user`](../src/bank/controller/user_controller.py#L40-L70):
+Executed in [`create_bank_account`](../src/bank/api/Account/AccountService.py#L17-L63):
 
-1. Pydantic validates and normalizes `email` (trimmed + lowercased), `display_name`, and `password` (`>= 12` chars).
-2. `_hash_password` generates a 16-byte random salt via `secrets.token_bytes(16)` and hashes with `hashlib.scrypt` (`n=16384, r=8, p=1`).
+1. Pydantic ([`bank_account_register_request`](../src/bank/api/Account/AccountValidator.py#L6-L19)) validates and normalizes `email` (trimmed + lowercased, `12–20` chars), `display_name` (`3–20` chars), and `password` (`8–20` chars).
+2. [`password_hash`](../src/bank/utils/hashing_pass.py#L6-L9) generates a 20-byte random salt via `secrets.token_bytes(20)` and hashes with `hashlib.scrypt` (`n=16384, r=8, p=1`).
 3. Opens one database transaction (`with get_connection() as connection:`):
    - Inserts into `user_acc` and returns `(id, email, display_name)`.
    - Inserts `(user_id, 0.00)` into `user_balance`.
 4. Commits automatically when the `with` block exits cleanly; rolls back if `UniqueViolation` (`409`) or `psycopg.Error` (`503`) occurs.
+
+---
+
+## 2b. Bank Transfer Order Creation *(Implemented)*
+
+Executed in [`create_bank_transfer`](../src/bank/api/BankTransfer/BankTransferService.py#L14-L78):
+
+1. Pydantic ([`BankTransferRequest`](../src/bank/api/BankTransfer/BankTransferValidator.py#L7-L23)) validates optional `order_id`, `account_detail`, `sender_id`, `receiver_id`, 3-letter `currency` (default `'INR'`), `status` (`'pending' | 'posted' | 'reversed' | 'failed'`), and `mode` (`max_length=20`).
+2. Rejects self-transfers (`sender_id == receiver_id` when both provided) with `400 Bad Request`.
+3. Generates `uuid.uuid4()` when `order_id` is omitted, inserts into `BankTransfer` with `RETURNING`, and maps `ForeignKeyViolation` (`404`), `UniqueViolation` (`409`), and `psycopg.Error` (`503`).
 
 ---
 

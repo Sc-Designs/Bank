@@ -30,70 +30,73 @@ Bank/
         ├── api/
         │   ├── Account/               # Account routes, schemas, service, utils & validators
         │   ├── BankTransfer/
-        │   │   └── MoneySchema.py     # PostgreSQL DDL helper for BankTransfer
+        │   │   ├── BankTransferController.py  # Bank transfer API routes
+        │   │   ├── BankTransferSchema.py      # PostgreSQL DDL & response schema for BankTransfer
+        │   │   ├── BankTransferService.py     # Bank transfer DB operations
+        │   │   └── BankTransferValidator.py   # Request validation for BankTransfer
         │   └── User Balance/
-        │       └── UserBallanceSchema.py  # PostgreSQL DDL helper for user_balance
+        │       ├── UserBallanceSchema.py  # PostgreSQL DDL helper for user_balance
+        │       └── UserService.py         # User balance service helpers
         ├── config/
         │   └── config.py              # Pydantic Settings loader for .env (POSTGRES_CONFIG)
         ├── db/
         │   └── db.py                  # PostgreSQL connection factory (psycopg v3)
-        └── router/
-            ├── __init__.py            # Aggregates feature routers (api_router)
-            └── routes.py              # Bank API router
+        ├── router/
+        │   ├── __init__.py            # Aggregates feature routers (api_router)
+        │   └── routes.py              # Bank API router
+        └── utils/
+            └── hashing_pass.py        # Password hashing & verification (scrypt)
 ```
 
 ---
 
 ## 2. Layered Architecture
 
-The codebase follows a clean **Router → Controller → Database → Config** separation:
+The codebase follows a **Router / Controller → Service / Validator → Database → Config** separation:
 
 ```mermaid
 flowchart LR
-    Client["HTTP Client / Swagger UI"] --> Router["router/* (FastAPI APIRouter)"]
-    Router --> Controller["controller/* (Validation & Transactions)"]
-    Controller --> DB["db/db.py (psycopg.Connection)"]
+    Client["HTTP Client / Swagger UI"] --> Router["AccountRoutes / BankTransferController"]
+    Router --> Service["*Service.py (Validation & Transactions)"]
+    Service --> DB["db/db.py (psycopg.Connection)"]
     DB --> PG[("PostgreSQL")]
     Config["config/config.py (.env Settings)"] -.-> DB
 ```
 
 | Layer | File(s) | Responsibilities |
 |---|---|---|
-| **App Entry** | [`src/bank/__init__.py`](../src/bank/__init__.py) | Instantiates `app = FastAPI()` and mounts routers |
+| **App Factory & Entry** | [`src/bank/app.py`](../src/bank/app.py), [`src/bank/main.py`](../src/bank/main.py), [`src/bank/__init__.py`](../src/bank/__init__.py) | Instantiates `FastAPI`, mounts routers, and runs startup DB check |
 | **Config** | [`src/bank/config/config.py`](../src/bank/config/config.py) | Loads `POSTGRES_CONFIG` from `.env` via `pydantic-settings` |
 | **Database** | [`src/bank/db/db.py`](../src/bank/db/db.py) | Provides `get_connection() -> psycopg.Connection` |
-| **Router** | [`src/bank/router/user_router.py`](../src/bank/router/user_router.py) | Defines HTTP verbs, paths, status codes, and response models |
-| **Controller** | [`src/bank/controller/user_controller.py`](../src/bank/controller/user_controller.py) | Input validation, password hashing, DB transaction orchestration, error mapping |
+| **Routes / Controllers** | [`src/bank/api/Account/AccountRoutes.py`](../src/bank/api/Account/AccountRoutes.py), [`src/bank/api/BankTransfer/BankTransferController.py`](../src/bank/api/BankTransfer/BankTransferController.py) | Defines HTTP verbs, paths, status codes, and response models |
+| **Services** | [`src/bank/api/Account/AccountService.py`](../src/bank/api/Account/AccountService.py), [`src/bank/api/BankTransfer/BankTransferService.py`](../src/bank/api/BankTransfer/BankTransferService.py) | Business logic, DB transaction orchestration, and error mapping |
+| **Validators & Schemas** | [`AccountValidator.py`](../src/bank/api/Account/AccountValidator.py), [`AccountSchema.py`](../src/bank/api/Account/AccountSchema.py), [`BankTransferValidator.py`](../src/bank/api/BankTransfer/BankTransferValidator.py), [`BankTransferSchema.py`](../src/bank/api/BankTransfer/BankTransferSchema.py), [`UserBallanceSchema.py`](../src/bank/api/User%20Balance/UserBallanceSchema.py) | Pydantic request/response models and PostgreSQL table DDL helpers |
+| **Utilities** | [`src/bank/utils/hashing_pass.py`](../src/bank/utils/hashing_pass.py) | Reusable `scrypt` password hashing and verification |
 
 ### Recommended Module Expansion
 
-As you implement the remaining features, follow the existing convention:
+As you implement the remaining features, follow the existing feature-folder convention under `src/bank/api/`:
 
-- **`src/bank/router/`**
-  - `user_router.py`: `/users/register`, `/users/me` (Account Details Show, Update, Deactivate)
-  - `auth_router.py`: `/auth/login` (authentication)
-  - `account_router.py` (or `transaction_router.py`): `/users/me/balance`, `/users/me/add-money`, `/users/me/transactions`, `/users/me/transfer`
-- **`src/bank/controller/`**
-  - `user_controller.py`: registration, profile read/update, account details aggregation
-  - `auth_controller.py`: password verification (`scrypt` constant-time `secrets.compare_digest`), token issuance
-  - `transaction_controller.py`: atomic Add Money, Credit, Debit, Transfer Money, Bank Balance, and History queries
+- **`src/bank/api/Account/`**: `/user/create-accounts`, `/users/me`, `/auth/login`
+- **`src/bank/api/User Balance/`**: `/users/me/balance`, balance updates & history queries
+- **`src/bank/api/BankTransfer/`**: `/bank-transfer/create`, atomic Add Money, Credit, Debit, and Transfer Money workflows
 
 ---
 
 ## 3. Security Controls
 
 ### Implemented Today
-- **Strong Password Hashing**: [`_hash_password`](../src/bank/controller/user_controller.py#L34-L37) uses `hashlib.scrypt` (`n=2**14, r=8, p=1`) with a unique 16-byte random salt (`secrets.token_bytes(16)`).
+- **Strong Password Hashing**: [`password_hash`](../src/bank/utils/hashing_pass.py#L6-L9) uses `hashlib.scrypt` (`n=2**14, r=8, p=1`) with a unique 20-byte random salt (`secrets.token_bytes(20)`), paired with constant-time [`verify_password`](../src/bank/utils/hashing_pass.py#L13-L37).
 - **Parameterized SQL**: All SQL statements pass values via `%s` bind parameters (`psycopg`), preventing SQL injection.
-- **No Credential Leakage**: `RegisteredUserResponse` returns only `id`, `email`, and `display_name`; `password_hash` and `POSTGRES_CONFIG` are never returned or logged.
-- **Minimum Password Length**: `RegisterUserRequest` enforces `min_length=12`, `max_length=128` and strips/lowercases emails.
+- **No Credential Leakage**: [`bank_account_register_response`](../src/bank/api/Account/AccountSchema.py#L4-L7) returns only `id`, `email`, and `display_name`; `password_hash` and `POSTGRES_CONFIG` are never returned or logged.
+- **Input Validation**: [`bank_account_register_request`](../src/bank/api/Account/AccountValidator.py#L6-L19) strips/lowercases emails (`12–20` chars) and enforces `password` (`8–20` chars); [`BankTransferRequest`](../src/bank/api/BankTransfer/BankTransferValidator.py#L7-L23) enforces 3-letter `currency`, allowed `status` values, and `mode` max length `20`.
 
 ### Required Before Production / Deployment
 - **Authentication & Authorization**: Protect all `/users/me/*` routes so a user can only read/mutate their own balance and transactions.
 - **Constant-Time Password Verification**: Use `hmac.compare_digest` / `secrets.compare_digest` when verifying `scrypt` digests during login.
 - **Idempotency Keys**: Enforce `Idempotency-Key` checks on `add-money`, `transactions`, and `transfer` to eliminate duplicate money movement on retries.
 - **Connection Pooling**: Replace per-request `psycopg.connect(...)` with `psycopg_pool.ConnectionPool` under load.
-- **Rate Limiting & Structured Logging**: Apply rate limits on `/auth/login`, `/users/register`, and `/users/me/transfer`, ensuring logs redact tokens, passwords, and DB DSNs.
+- **Rate Limiting & Structured Logging**: Apply rate limits on `/auth/login`, `/user/create-accounts`, `/bank-transfer/create`, and `/users/me/transfer`, ensuring logs redact tokens, passwords, and DB DSNs.
 
 ---
 
