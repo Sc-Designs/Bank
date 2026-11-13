@@ -6,6 +6,7 @@ from .db.db import get_connection
 from .router import api_router
 from .api.Account.AccountRoutes import route as account_opening
 from .api.BankTransfer.BankTransferRoutes import route as bank_transfer_router
+from .api.UserBalance.UserRouter import route as user_balance
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -39,3 +40,4 @@ app = create_app()
 
 app.include_router(account_opening)
 app.include_router(bank_transfer_router)
+app.include_router(user_balance)

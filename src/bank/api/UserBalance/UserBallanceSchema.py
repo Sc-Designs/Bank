@@ -1,5 +1,5 @@
 from ...db.db import get_connection
-
+from pydantic import BaseModel
 
 def UserBallanceSchema():
     conn = None
@@ -27,3 +27,8 @@ def UserBallanceSchema():
     finally:
         if conn:
             conn.close()
+
+
+class money_add_response(BaseModel):
+    user_id: str
+    balance: float

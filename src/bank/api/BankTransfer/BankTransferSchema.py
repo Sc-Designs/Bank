@@ -48,3 +48,5 @@ class BankTransferResponse(BaseModel):
     currency: str
     status: str
     mode: str | None = None
+    sender_display_name: str
+    receiver_display_name: str
