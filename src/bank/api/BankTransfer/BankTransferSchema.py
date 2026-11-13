@@ -15,6 +15,7 @@ def BankTransfer_Schema():
                 AccountDetail UUID,
                 Sender UUID NULL,
                 Receiver UUID NULL,
+                amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00 CHECK (amount >= 0),
                 currency CHAR(3) NOT NULL DEFAULT 'INR',
                 status TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending', 'posted', 'reversed', 'failed')),
@@ -43,6 +44,9 @@ class BankTransferResponse(BaseModel):
     account_detail: str | None = None
     sender_id: str | None = None
     receiver_id: str | None = None
+    amount: float
     currency: str
     status: str
     mode: str | None = None
+    sender_display_name: str
+    receiver_display_name: str
